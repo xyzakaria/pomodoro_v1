@@ -10,27 +10,30 @@ function App() {
   const { user, loading, signOut } = useAuth();
   const [refreshHistory, setRefreshHistory] = useState(0);
   const [activeTab, setActiveTab] = useState<'timer' | 'calendar'>('timer');
+
+  // 🔥 Dark mode persisté
   const [darkMode, setDarkMode] = useState(() => {
-  if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return false;
 
-  const stored = localStorage.getItem('theme');
-  if (stored === 'dark') return true;
-  if (stored === 'light') return false;
+    const stored = localStorage.getItem('theme');
+    if (stored === 'dark') return true;
+    if (stored === 'light') return false;
 
-  // Si rien en storage, on suit la préférence système
-  return window.matchMedia &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches;
-});
+    return (
+      window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+    );
+  });
 
-useEffect(() => {
-  if (darkMode) {
-    document.documentElement.classList.add('dark');
-    localStorage.setItem('theme', 'dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-    localStorage.setItem('theme', 'light');
-  }
-}, [darkMode]);
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
 
   if (loading) {
     return (
@@ -53,8 +56,12 @@ useEffect(() => {
               <Timer className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Pomodoro Timer</h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{user.email}</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Pomodoro Timer
+              </h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {user.email}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -75,6 +82,7 @@ useEffect(() => {
           </div>
         </header>
 
+        {/* Tabs */}
         <div className="mb-6">
           <div className="flex gap-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-1 w-fit">
             <button
@@ -100,24 +108,30 @@ useEffect(() => {
           </div>
         </div>
 
-        {activeTab === 'timer' && (
-          <div className="space-y-6">
+        {/* 🧠 IMPORTANT : on rend TOUJOURS les deux, on joue seulement sur hidden */}
+        <div className="space-y-6">
+          {/* Bloc Timer + History */}
+          <div className={activeTab === 'timer' ? 'block' : 'hidden'}>
             <div className="grid lg:grid-cols-2 gap-6 items-start">
               <div className="flex justify-center">
-                <PomodoroTimer onSessionComplete={() => setRefreshHistory(prev => prev + 1)} darkMode={darkMode} />
+                <PomodoroTimer
+                  onSessionComplete={() =>
+                    setRefreshHistory((prev) => prev + 1)
+                  }
+                  darkMode={darkMode}
+                />
               </div>
               <div className="flex justify-center">
                 <SessionHistory refresh={refreshHistory} darkMode={darkMode} />
               </div>
             </div>
           </div>
-        )}
 
-        {activeTab === 'calendar' && (
-          <div className="flex justify-center">
+          {/* Bloc Calendar */}
+          <div className={activeTab === 'calendar' ? 'flex justify-center' : 'hidden'}>
             <StudyCalendar refresh={refreshHistory} darkMode={darkMode} />
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
