@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Save } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { useState, useEffect, useRef, FormEvent } from 'react';
+import { Play, Pause, RotateCcw, Save, Plus } from 'lucide-react';
+import { supabase, Category } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 interface PomodoroTimerProps {
@@ -10,17 +10,44 @@ interface PomodoroTimerProps {
 
 export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroTimerProps) {
   const [sessionName, setSessionName] = useState('');
-  const [category, setCategory] = useState('Programming'); // par exemple valeur par défaut
   const [minutes, setMinutes] = useState(25);
   const [seconds, setSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [initialMinutes, setInitialMinutes] = useState(25);
   const [isSaving, setIsSaving] = useState(false);
-  const [isFinished, setIsFinished] = useState(false); // 👈 nouvel état
+  const [isFinished, setIsFinished] = useState(false);
+
+  // Catégories
+  const [category, setCategory] = useState('General');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState('#3b82f6');
+  const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+
   const intervalRef = useRef<number | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null); // 👈 ref son
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { user } = useAuth();
 
+  // Charger les catégories de l'utilisateur
+  useEffect(() => {
+    const loadCategories = async () => {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+
+      if (!error && data) {
+        setCategories(data);
+      }
+    };
+
+    loadCategories();
+  }, [user]);
+
+  // Timer
   useEffect(() => {
     if (isRunning) {
       intervalRef.current = window.setInterval(() => {
@@ -28,7 +55,7 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
           if (prevSeconds === 0) {
             setMinutes((prevMinutes) => {
               if (prevMinutes === 0) {
-                // On laisse la détection de fin au useEffect ci-dessous
+                // on laisse la détection finale au useEffect suivant
                 return 0;
               }
               return prevMinutes - 1;
@@ -47,23 +74,22 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
     };
   }, [isRunning]);
 
-  // 🔔 Détection de la fin du timer : 00:00
+  // Détection de fin : 00:00
   useEffect(() => {
-    if (minutes === 0 && seconds === 0 && initialMinutes > 0) {
-      if (!isFinished) {
-        setIsRunning(false);
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
-        setIsFinished(true);
+    if (minutes === 0 && seconds === 0 && initialMinutes > 0 && !isFinished) {
+      setIsRunning(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      setIsFinished(true);
 
-        // Lecture du son
-        if (audioRef.current) {
-          audioRef.current.currentTime = 0;
-          audioRef.current.play().catch(() => {
-            // Si le navigateur bloque la lecture auto, on ignore
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current
+          .play()
+          .catch(() => {
+            // Si le navigateur bloque l'auto-play, on ignore
           });
-        }
       }
     }
   }, [minutes, seconds, initialMinutes, isFinished]);
@@ -73,7 +99,7 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
     if (!isRunning && minutes === initialMinutes && seconds === 0) {
       setInitialMinutes(minutes);
     }
-    setIsFinished(false); // 👈 on enlève l’état “fini” quand on relance
+    setIsFinished(false);
     setIsRunning(true);
   };
 
@@ -85,48 +111,13 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
     setIsRunning(false);
     setMinutes(initialMinutes);
     setSeconds(0);
-    setIsFinished(false); // 👈 reset du clignotement
+    setIsFinished(false);
+
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
   };
-
-const handleSave = async () => {
-  if (!user) return;
-
-  // Temps total écoulé en secondes
-  const totalSeconds = initialMinutes * 60 - (minutes * 60 + seconds);
-
-  // Si vraiment trop court, on refuse (par ex. moins d'une minute)
-  if (totalSeconds < 60) {
-    alert('Session too short to save!');
-    return;
-  }
-
-  // Conversion en minutes, arrondi vers le haut
-  const totalMinutes = Math.ceil(totalSeconds / 60);
-
-  setIsSaving(true);
-
-  const { error } = await supabase.from('timer_sessions').insert({
-    user_id: user.id,
-    name: sessionName || 'Pomodoro Session',
-    duration_minutes: totalMinutes,
-    completed_at: new Date().toISOString(),
-  });
-
-  if (error) {
-    alert('Failed to save session: ' + error.message);
-  } else {
-    onSessionComplete();
-    setSessionName('');
-    handleReset();
-  }
-
-  setIsSaving(false);
-};
-
 
   const handleDurationChange = (newMinutes: number) => {
     if (!isRunning) {
@@ -137,17 +128,100 @@ const handleSave = async () => {
     }
   };
 
-  const progress = initialMinutes > 0
-    ? ((initialMinutes * 60 - (minutes * 60 + seconds)) / (initialMinutes * 60)) * 100
-    : 0;
+  // Ajout d'une catégorie
+  const handleAddCategory = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    const name = newCategoryName.trim();
+    if (!name) {
+      setCategoryMessage('Category name is required.');
+      return;
+    }
+
+    setCategoryLoading(true);
+    setCategoryMessage(null);
+
+    const { data, error } = await supabase
+      .from('categories')
+      .insert({
+        user_id: user.id,
+        name,
+        color: newCategoryColor || '#3b82f6',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.message.includes('categories_user_id_name_idx')) {
+        setCategoryMessage('This category already exists.');
+      } else {
+        setCategoryMessage('Failed to add category.');
+      }
+    } else if (data) {
+      setCategories((prev) => [...prev, data]);
+      setCategory(data.name);
+      setNewCategoryName('');
+      setCategoryMessage('Category added.');
+    }
+
+    setCategoryLoading(false);
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+
+    // Temps écoulé en secondes
+    const totalSeconds = initialMinutes * 60 - (minutes * 60 + seconds);
+
+    if (totalSeconds < 60) {
+      alert('Session too short to save!');
+      return;
+    }
+
+    const totalMinutes = Math.ceil(totalSeconds / 60);
+
+    setIsSaving(true);
+
+    const { error } = await supabase.from('timer_sessions').insert({
+      user_id: user.id,
+      name: sessionName || 'Pomodoro Session',
+      duration_minutes: totalMinutes,
+      completed_at: new Date().toISOString(),
+      category: (category || 'General').trim(),
+    });
+
+    if (error) {
+      alert('Failed to save session: ' + error.message);
+    } else {
+      onSessionComplete();
+      setSessionName('');
+      handleReset();
+    }
+
+    setIsSaving(false);
+  };
+
+  const progress =
+    initialMinutes > 0
+      ? ((initialMinutes * 60 - (minutes * 60 + seconds)) /
+          (initialMinutes * 60)) *
+        100
+      : 0;
+
+  const categoryColor =
+    categories.find((c) => c.name === category)?.color || '#3b82f6';
 
   return (
     <div
-      className={`${darkMode ? 'bg-slate-800' : 'bg-white'} rounded-2xl shadow-xl p-8 w-full max-w-md`}
+      className={`${
+        darkMode ? 'bg-slate-800' : 'bg-white'
+      } rounded-2xl shadow-xl p-8 w-full max-w-md`}
     >
-      {/* 🔊 Élément audio pour le son de fin */}
+      {/* Son de fin */}
       <audio ref={audioRef} src="/timer-finished.mp3" preload="auto" />
 
+      {/* Session name */}
       <div className="mb-6">
         <label
           htmlFor="sessionName"
@@ -171,6 +245,86 @@ const handleSave = async () => {
         />
       </div>
 
+      {/* Category */}
+      <div className="mb-6 space-y-3">
+        <div>
+          <label
+            htmlFor="category"
+            className={`block text-sm font-medium ${
+              darkMode ? 'text-gray-300' : 'text-gray-700'
+            } mb-2`}
+          >
+            Category
+          </label>
+          <div className="flex gap-2 items-center">
+            <span
+              className="inline-block w-4 h-4 rounded-full border border-gray-300"
+              style={{ backgroundColor: categoryColor }}
+            />
+            <select
+              id="category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                darkMode
+                  ? 'bg-slate-700 border-slate-600 text-white'
+                  : 'border-gray-300'
+              }`}
+            >
+              <option value="General">General</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <form onSubmit={handleAddCategory} className="space-y-2 text-sm">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="New category name"
+              className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                darkMode
+                  ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
+                  : 'border-gray-300'
+              }`}
+            />
+            <input
+              type="color"
+              value={newCategoryColor}
+              onChange={(e) => setNewCategoryColor(e.target.value)}
+              className="w-12 h-10 rounded cursor-pointer border border-gray-300"
+              title="Category color"
+            />
+            <button
+              type="submit"
+              disabled={categoryLoading}
+              className="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Add
+            </button>
+          </div>
+          {categoryMessage && (
+            <p
+              className={`text-xs ${
+                categoryMessage.includes('Failed')
+                  ? 'text-red-500'
+                  : 'text-gray-500'
+              }`}
+            >
+              {categoryMessage}
+            </p>
+          )}
+        </form>
+      </div>
+
+      {/* Duration */}
       <div className="mb-6">
         <label
           className={`block text-sm font-medium ${
@@ -231,6 +385,7 @@ const handleSave = async () => {
         </div>
       </div>
 
+      {/* Timer cercle + temps */}
       <div className="relative mb-8">
         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 200 200">
           <circle
@@ -245,7 +400,7 @@ const handleSave = async () => {
             cx="100"
             cy="100"
             r="90"
-            stroke={isFinished ? '#ef4444' : '#3b82f6'} // 👈 bleu normal, rouge à la fin
+            stroke={isFinished ? '#ef4444' : '#3b82f6'}
             strokeWidth="12"
             fill="none"
             strokeDasharray={`${2 * Math.PI * 90}`}
@@ -253,7 +408,7 @@ const handleSave = async () => {
             strokeLinecap="round"
             className={`transition-all duration-1000 ${
               isFinished ? 'animate-pulse' : ''
-            }`} // 👈 clignote
+            }`}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
@@ -267,12 +422,14 @@ const handleSave = async () => {
                   : 'text-gray-900'
               }`}
             >
-              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+              {String(minutes).padStart(2, '0')}:
+              {String(seconds).padStart(2, '0')}
             </div>
           </div>
         </div>
       </div>
 
+      {/* Boutons */}
       <div className="flex gap-3">
         {!isRunning ? (
           <button
