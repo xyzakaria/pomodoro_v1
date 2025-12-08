@@ -91,37 +91,41 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
     }
   };
 
-  const handleSave = async () => {
-    if (!user) return;
+const handleSave = async () => {
+  if (!user) return;
 
-    const completedMinutes = initialMinutes - minutes;
-    const completedSeconds = 60 - seconds;
-    const totalMinutes = completedMinutes + (completedSeconds > 0 && seconds < 60 ? 1 : 0);
+  // Temps total écoulé en secondes
+  const totalSeconds = initialMinutes * 60 - (minutes * 60 + seconds);
 
-    if (totalMinutes === 0) {
-      alert('No time to save yet!');
-      return;
-    }
+  // Si vraiment trop court, on refuse (par ex. moins d'une minute)
+  if (totalSeconds < 60) {
+    alert('Session too short to save!');
+    return;
+  }
 
-    setIsSaving(true);
+  // Conversion en minutes, arrondi vers le haut
+  const totalMinutes = Math.ceil(totalSeconds / 60);
 
-    const { error } = await supabase.from('timer_sessions').insert({
-      user_id: user.id,
-      name: sessionName || 'Pomodoro Session',
-      duration_minutes: totalMinutes,
-      completed_at: new Date().toISOString(),
-    });
+  setIsSaving(true);
 
-    if (error) {
-      alert('Failed to save session: ' + error.message);
-    } else {
-      onSessionComplete();
-      setSessionName('');
-      handleReset();
-    }
+  const { error } = await supabase.from('timer_sessions').insert({
+    user_id: user.id,
+    name: sessionName || 'Pomodoro Session',
+    duration_minutes: totalMinutes,
+    completed_at: new Date().toISOString(),
+  });
 
-    setIsSaving(false);
-  };
+  if (error) {
+    alert('Failed to save session: ' + error.message);
+  } else {
+    onSessionComplete();
+    setSessionName('');
+    handleReset();
+  }
+
+  setIsSaving(false);
+};
+
 
   const handleDurationChange = (newMinutes: number) => {
     if (!isRunning) {
