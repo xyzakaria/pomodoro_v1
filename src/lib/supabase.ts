@@ -16,4 +16,5 @@ export interface TimerSession {
   duration_minutes: number;
   completed_at: string;
   created_at: string;
+  category: string; // 👈 nouvelle propriété
 }
