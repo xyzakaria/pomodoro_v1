@@ -16,5 +16,13 @@ export interface TimerSession {
   duration_minutes: number;
   completed_at: string;
   created_at: string;
-  category: string; // 👈 nouvelle propriété
+  category: string; // déjà ajouté
+}
+
+export interface Category {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  created_at: string;
 }
