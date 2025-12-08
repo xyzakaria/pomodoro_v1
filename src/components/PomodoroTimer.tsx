@@ -152,18 +152,24 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
       .select()
       .single();
 
-    if (error) {
-      if (error.message.includes('categories_user_id_name_idx')) {
-        setCategoryMessage('This category already exists.');
-      } else {
-        setCategoryMessage('Failed to add category.');
-      }
-    } else if (data) {
-      setCategories((prev) => [...prev, data]);
-      setCategory(data.name);
-      setNewCategoryName('');
-      setCategoryMessage('Category added.');
-    }
+   if (error) {
+  console.error('Error inserting category', error);
+
+  // Si c'est un problème de doublon (index unique)
+  if (error.message.includes('categories_user_id_name_idx')) {
+    setCategoryMessage('This category already exists.');
+  } else {
+    // Afficher le message réel
+    setCategoryMessage(`Failed to add category: ${error.message}`);
+  }
+
+} else if (data) {
+  setCategories((prev) => [...prev, data]);
+  setCategory(data.name);
+  setNewCategoryName('');
+  setCategoryMessage('Category added.');
+}
+
 
     setCategoryLoading(false);
   };
