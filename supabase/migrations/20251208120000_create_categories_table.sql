@@ -37,5 +37,6 @@ CREATE POLICY "Users can delete own categories"
   USING (auth.uid() = user_id);
 
 CREATE INDEX IF NOT EXISTS categories_user_id_idx ON categories(user_id);
+
 CREATE UNIQUE INDEX IF NOT EXISTS categories_user_id_name_idx
   ON categories(user_id, name);
