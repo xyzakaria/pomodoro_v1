@@ -17,6 +17,7 @@ export function SessionHistory({ refresh, darkMode = false }: SessionHistoryProp
   const [sessions, setSessions] = useState<TimerSession[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const { user } = useAuth();
 
   const loadSessions = async () => {
@@ -70,13 +71,6 @@ export function SessionHistory({ refresh, darkMode = false }: SessionHistoryProp
     }
   };
 
-  const totalMinutes = sessions.reduce(
-    (sum, session) => sum + session.duration_minutes,
-    0
-  );
-  const totalHours = Math.floor(totalMinutes / 60);
-  const remainingMinutes = totalMinutes % 60;
-
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -110,8 +104,35 @@ export function SessionHistory({ refresh, darkMode = false }: SessionHistoryProp
     categoryColorMap[cat.name] = cat.color;
   });
 
-  // Totaux par catégorie (avec couleur)
-  const categoryTotals = sessions.reduce<Record<string, CategoryTotal>>(
+  // Liste des catégories disponibles (pour le select)
+  const sessionCategoryNames = Array.from(
+    new Set(sessions.map((s) => s.category || 'General'))
+  );
+
+  const allCategoryOptions = [
+    'All',
+    'General',
+    ...sessionCategoryNames.filter((c) => c !== 'General'),
+  ];
+
+  // Sessions filtrées selon la catégorie choisie
+  const filteredSessions =
+    selectedCategory === 'All'
+      ? sessions
+      : sessions.filter(
+          (s) => (s.category || 'General') === selectedCategory
+        );
+
+  // Totaux basés sur les sessions filtrées
+  const totalMinutes = filteredSessions.reduce(
+    (sum, session) => sum + session.duration_minutes,
+    0
+  );
+  const totalHours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
+
+  // Totaux par catégorie (dans le contexte du filtre)
+  const categoryTotals = filteredSessions.reduce<Record<string, CategoryTotal>>(
     (acc, session) => {
       const name = session.category || 'General';
       const color = categoryColorMap[name];
@@ -153,13 +174,39 @@ export function SessionHistory({ refresh, darkMode = false }: SessionHistoryProp
       } rounded-2xl shadow-xl p-8 w-full max-w-2xl`}
     >
       <div className="flex items-start justify-between mb-6 gap-4">
-        <h2
-          className={`text-2xl font-bold ${
-            darkMode ? 'text-white' : 'text-gray-900'
-          }`}
-        >
-          Session History
-        </h2>
+        <div className="space-y-2">
+          <h2
+            className={`text-2xl font-bold ${
+              darkMode ? 'text-white' : 'text-gray-900'
+            }`}
+          >
+            Session History
+          </h2>
+
+          {/* Select catégorie */}
+          <div className="flex items-center gap-2 text-sm">
+            <span
+              className={darkMode ? 'text-gray-400' : 'text-gray-600'}
+            >
+              Category:
+            </span>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className={`px-2 py-1 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                darkMode
+                  ? 'bg-slate-700 border-slate-600 text-gray-100'
+                  : 'bg-white border-gray-300 text-gray-800'
+              }`}
+            >
+              {allCategoryOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name === 'All' ? 'All categories' : name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
         {totalMinutes > 0 && (
           <div className="text-right space-y-2">
@@ -170,6 +217,11 @@ export function SessionHistory({ refresh, darkMode = false }: SessionHistoryProp
                 }`}
               >
                 Total Time
+                {selectedCategory !== 'All' && (
+                  <span className="ml-1 text-xs opacity-80">
+                    ({selectedCategory})
+                  </span>
+                )}
               </div>
               <div className="text-2xl font-bold text-blue-600">
                 {totalHours > 0 && `${totalHours}h `}
@@ -177,7 +229,7 @@ export function SessionHistory({ refresh, darkMode = false }: SessionHistoryProp
               </div>
             </div>
 
-            {/* Totaux par catégorie */}
+            {/* Totaux par catégorie (dans le filtre courant) */}
             <div className="mt-1 max-h-24 overflow-y-auto space-y-1">
               {Object.entries(categoryTotals).map(([name, info]) => (
                 <div
@@ -209,20 +261,22 @@ export function SessionHistory({ refresh, darkMode = false }: SessionHistoryProp
         )}
       </div>
 
-      {sessions.length === 0 ? (
-        <div className="text-center py-12">
+      {filteredSessions.length === 0 ? (
+        <div className="text-center py  -12">
           <Clock
             className={`w-16 h-16 mx-auto mb-4 ${
               darkMode ? 'text-slate-600' : 'text-gray-300'
             }`}
           />
           <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
-            No sessions yet. Start your first timer!
+            {selectedCategory === 'All'
+              ? 'No sessions yet. Start your first timer!'
+              : 'No sessions for this category yet.'}
           </p>
         </div>
       ) : (
         <div className="space-y-3 max-h-[500px] overflow-y-auto">
-          {sessions.map((session) => {
+          {filteredSessions.map((session) => {
             const catName = session.category || 'General';
             const catColor = categoryColorMap[catName];
 
