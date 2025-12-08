@@ -10,15 +10,27 @@ function App() {
   const { user, loading, signOut } = useAuth();
   const [refreshHistory, setRefreshHistory] = useState(0);
   const [activeTab, setActiveTab] = useState<'timer' | 'calendar'>('timer');
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+  if (typeof window === 'undefined') return false;
 
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
+  const stored = localStorage.getItem('theme');
+  if (stored === 'dark') return true;
+  if (stored === 'light') return false;
+
+  // Si rien en storage, on suit la préférence système
+  return window.matchMedia &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches;
+});
+
+useEffect(() => {
+  if (darkMode) {
+    document.documentElement.classList.add('dark');
+    localStorage.setItem('theme', 'dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+    localStorage.setItem('theme', 'light');
+  }
+}, [darkMode]);
 
   if (loading) {
     return (
