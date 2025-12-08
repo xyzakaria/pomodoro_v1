@@ -10,6 +10,7 @@ interface PomodoroTimerProps {
 
 export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroTimerProps) {
   const [sessionName, setSessionName] = useState('');
+  const [category, setCategory] = useState('Programming'); // par exemple valeur par défaut
   const [minutes, setMinutes] = useState(25);
   const [seconds, setSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
