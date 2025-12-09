@@ -10,9 +10,9 @@ function App() {
   const { user, loading, signOut } = useAuth();
   const [refreshHistory, setRefreshHistory] = useState(0);
   const [activeTab, setActiveTab] = useState<'timer' | 'calendar'>('timer');
-  const [categoriesVersion, setCategoriesVersion] = useState(0); // 👈 NEW
+  const [categoriesVersion, setCategoriesVersion] = useState(0);
+  const [lecturesVersion, setLecturesVersion] = useState(0); // 👈 NEW
 
-  // Dark mode persistant
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === 'undefined') return false;
 
@@ -39,7 +39,9 @@ function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
-        <div className="text-xl text-gray-600 dark:text-gray-400">Loading...</div>
+        <div className="text-xl text-gray-600 dark:text-gray-400">
+          Loading...
+        </div>
       </div>
     );
   }
@@ -83,7 +85,6 @@ function App() {
           </div>
         </header>
 
-        {/* Tabs */}
         <div className="mb-6">
           <div className="flex gap-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-1 w-fit">
             <button
@@ -110,14 +111,16 @@ function App() {
         </div>
 
         <div className="space-y-6">
-          {/* Bloc Timer + History */}
           <div className={activeTab === 'timer' ? 'block' : 'hidden'}>
             <div className="grid lg:grid-cols-2 gap-6 items-start">
               <div className="flex justify-center">
                 <PomodoroTimer
-                  onSessionComplete={() => setRefreshHistory((prev) => prev + 1)}
+                  onSessionComplete={() =>
+                    setRefreshHistory((prev) => prev + 1)
+                  }
                   darkMode={darkMode}
-                  categoriesVersion={categoriesVersion}   // 👈 NEW
+                  categoriesVersion={categoriesVersion}
+                  lecturesVersion={lecturesVersion} // 👈 NEW
                 />
               </div>
               <div className="flex justify-center">
@@ -125,14 +128,16 @@ function App() {
                   refresh={refreshHistory}
                   darkMode={darkMode}
                   onCategoriesChanged={() =>
-                    setCategoriesVersion((prev) => prev + 1) // 👈 NEW
+                    setCategoriesVersion((prev) => prev + 1)
+                  }
+                  onLecturesChanged={() =>
+                    setLecturesVersion((prev) => prev + 1) // 👈 NEW
                   }
                 />
               </div>
             </div>
           </div>
 
-          {/* Bloc Calendar */}
           <div
             className={
               activeTab === 'calendar' ? 'flex justify-center' : 'hidden'
