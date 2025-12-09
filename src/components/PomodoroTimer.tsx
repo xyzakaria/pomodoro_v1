@@ -25,6 +25,10 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
   const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
   const [categoryLoading, setCategoryLoading] = useState(false);
 
+  // Rename
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+
   const intervalRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { user } = useAuth();
@@ -55,7 +59,6 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
           if (prevSeconds === 0) {
             setMinutes((prevMinutes) => {
               if (prevMinutes === 0) {
-                // on laisse la détection finale au useEffect suivant
                 return 0;
               }
               return prevMinutes - 1;
@@ -88,7 +91,7 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
         audioRef.current
           .play()
           .catch(() => {
-            // Si le navigateur bloque l'auto-play, on ignore
+            // navigateur peut bloquer l'auto-play, on ignore
           });
       }
     }
@@ -152,24 +155,135 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
       .select()
       .single();
 
-   if (error) {
-  console.error('Error inserting category', error);
+    if (error) {
+      console.error('Error inserting category', error);
+      if (error.message.includes('categories_user_id_name_idx')) {
+        setCategoryMessage('This category already exists.');
+      } else {
+        setCategoryMessage(`Failed to add category: ${error.message}`);
+      }
+    } else if (data) {
+      setCategories((prev) => [...prev, data]);
+      setCategory(data.name);
+      setNewCategoryName('');
+      setCategoryMessage('Category added.');
+    }
 
-  // Si c'est un problème de doublon (index unique)
-  if (error.message.includes('categories_user_id_name_idx')) {
-    setCategoryMessage('This category already exists.');
-  } else {
-    // Afficher le message réel
-    setCategoryMessage(`Failed to add category: ${error.message}`);
-  }
+    setCategoryLoading(false);
+  };
 
-} else if (data) {
-  setCategories((prev) => [...prev, data]);
-  setCategory(data.name);
-  setNewCategoryName('');
-  setCategoryMessage('Category added.');
-}
+  // Démarrer le rename
+  const startEditingCategory = (name: string) => {
+    setEditingCategory(name);
+    setEditingCategoryName(name);
+    setCategoryMessage(null);
+  };
 
+  // Valider le rename
+  const handleRenameCategory = async (e: FormEvent, oldName: string) => {
+    e.preventDefault();
+    if (!user) return;
+
+    const newName = editingCategoryName.trim();
+    if (!newName) {
+      setCategoryMessage('Category name is required.');
+      return;
+    }
+
+    if (newName === oldName) {
+      setEditingCategory(null);
+      return;
+    }
+
+    setCategoryLoading(true);
+    setCategoryMessage(null);
+
+    // Update dans la table categories
+    const { error: catError } = await supabase
+      .from('categories')
+      .update({ name: newName })
+      .eq('user_id', user.id)
+      .eq('name', oldName);
+
+    if (catError) {
+      console.error('Error renaming category', catError);
+      if (catError.message.includes('categories_user_id_name_idx')) {
+        setCategoryMessage('A category with this name already exists.');
+      } else {
+        setCategoryMessage('Failed to rename category.');
+      }
+      setCategoryLoading(false);
+      return;
+    }
+
+    // Mettre à jour toutes les sessions avec l'ancien nom
+    const { error: sessError } = await supabase
+      .from('timer_sessions')
+      .update({ category: newName })
+      .eq('user_id', user.id)
+      .eq('category', oldName);
+
+    if (sessError) {
+      console.error('Error updating sessions category', sessError);
+      setCategoryMessage('Category renamed, but failed to update some sessions.');
+    } else {
+      setCategoryMessage('Category renamed.');
+    }
+
+    // Sync local
+    setCategories((prev) =>
+      prev.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
+    );
+    if (category === oldName) {
+      setCategory(newName);
+    }
+
+    setEditingCategory(null);
+    setCategoryLoading(false);
+  };
+
+  // Suppression d'une catégorie : on remet les sessions sur "General"
+  const handleDeleteCategory = async (name: string) => {
+    if (!user) return;
+
+    if (!confirm(`Delete category "${name}"? Sessions using it will be set to "General".`)) {
+      return;
+    }
+
+    setCategoryLoading(true);
+    setCategoryMessage(null);
+
+    // Mettre à jour les sessions
+    const { error: sessError } = await supabase
+      .from('timer_sessions')
+      .update({ category: 'General' })
+      .eq('user_id', user.id)
+      .eq('category', name);
+
+    if (sessError) {
+      console.error('Error updating sessions for deleted category', sessError);
+      setCategoryMessage('Failed to update sessions for this category.');
+      setCategoryLoading(false);
+      return;
+    }
+
+    // Supprimer la catégorie
+    const { error: deleteError } = await supabase
+      .from('categories')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('name', name);
+
+    if (deleteError) {
+      console.error('Error deleting category', deleteError);
+      setCategoryMessage('Failed to delete category.');
+    } else {
+      setCategories((prev) => prev.filter((c) => c.name !== name));
+      if (category === name) {
+        setCategory('General');
+      }
+      setCategoryMessage('Category deleted.');
+    }
 
     setCategoryLoading(false);
   };
@@ -287,6 +401,7 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
           </div>
         </div>
 
+        {/* Ajouter une catégorie */}
         <form onSubmit={handleAddCategory} className="space-y-2 text-sm">
           <div className="flex gap-2">
             <input
@@ -316,18 +431,92 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
               Add
             </button>
           </div>
-          {categoryMessage && (
-            <p
-              className={`text-xs ${
-                categoryMessage.includes('Failed')
-                  ? 'text-red-500'
-                  : 'text-gray-500'
-              }`}
-            >
-              {categoryMessage}
-            </p>
-          )}
         </form>
+
+        {/* Liste des catégories avec rename + delete */}
+        {categories.length > 0 && (
+          <div className="text-xs space-y-1 mt-2 max-h-32 overflow-y-auto">
+            {categories.map((cat) => (
+              <div
+                key={cat.id}
+                className={`flex items-center justify-between px-2 py-1 rounded ${
+                  darkMode ? 'bg-slate-700' : 'bg-gray-100'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="inline-block w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: cat.color }}
+                  />
+                  {editingCategory === cat.name ? (
+                    <form
+                      onSubmit={(e) => handleRenameCategory(e, cat.name)}
+                      className="flex items-center gap-2 min-w-0"
+                    >
+                      <input
+                        type="text"
+                        value={editingCategoryName}
+                        onChange={(e) => setEditingCategoryName(e.target.value)}
+                        className={`px-2 py-1 border rounded text-xs min-w-0 ${
+                          darkMode
+                            ? 'bg-slate-800 border-slate-600 text-gray-100'
+                            : 'bg-white border-gray-300 text-gray-800'
+                        }`}
+                      />
+                      <button
+                        type="submit"
+                        disabled={categoryLoading}
+                        className="text-green-500 hover:text-green-700"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingCategory(null)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <span className="truncate">{cat.name}</span>
+                  )}
+                </div>
+
+                {editingCategory !== cat.name && (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => startEditingCategory(cat.name)}
+                      className="text-blue-500 hover:text-blue-700"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCategory(cat.name)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {categoryMessage && (
+          <p
+            className={`text-xs ${
+              categoryMessage.toLowerCase().includes('fail')
+                ? 'text-red-500'
+                : 'text-gray-500'
+            }`}
+          >
+            {categoryMessage}
+          </p>
+        )}
       </div>
 
       {/* Duration */}
@@ -452,7 +641,6 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
             className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             <Pause className="w-5 h-5" />
-            Pause
           </button>
         )}
 
