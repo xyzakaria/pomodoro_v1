@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 interface SessionHistoryProps {
   refresh: number;
   darkMode?: boolean;
-  onCategoriesChanged?: () => void; // 👈 pour prévenir le parent
+  onCategoriesChanged?: () => void;
 }
 
 interface CategoryTotal {
@@ -24,7 +24,6 @@ export function SessionHistory({
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  // gestion catégories
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#3b82f6');
   const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
@@ -158,7 +157,7 @@ export function SessionHistory({
     {}
   );
 
-  // ---------- Gestion catégories (add / rename / delete) ----------
+  // ---------- Subjects (categories) management ----------
 
   const handleAddCategory = async (e: FormEvent) => {
     e.preventDefault();
@@ -166,7 +165,7 @@ export function SessionHistory({
 
     const name = newCategoryName.trim();
     if (!name) {
-      setCategoryMessage('Category name is required.');
+      setCategoryMessage('Subject name is required.');
       return;
     }
 
@@ -186,13 +185,13 @@ export function SessionHistory({
     if (error) {
       console.error('Error inserting category', error);
       if (error.message.includes('categories_user_id_name_idx')) {
-        setCategoryMessage('This category already exists.');
+        setCategoryMessage('This subject already exists.');
       } else {
-        setCategoryMessage(`Failed to add category: ${error.message}`);
+        setCategoryMessage(`Failed to add subject: ${error.message}`);
       }
     } else if (data) {
       setCategories((prev) => [...prev, data]);
-      setCategoryMessage('Category added.');
+      setCategoryMessage('Subject added.');
       setNewCategoryName('');
       onCategoriesChanged?.();
     }
@@ -212,7 +211,7 @@ export function SessionHistory({
 
     const newName = editingCategoryName.trim();
     if (!newName) {
-      setCategoryMessage('Category name is required.');
+      setCategoryMessage('Subject name is required.');
       return;
     }
 
@@ -233,9 +232,9 @@ export function SessionHistory({
     if (catError) {
       console.error('Error renaming category', catError);
       if (catError.message.includes('categories_user_id_name_idx')) {
-        setCategoryMessage('A category with this name already exists.');
+        setCategoryMessage('A subject with this name already exists.');
       } else {
-        setCategoryMessage('Failed to rename category.');
+        setCategoryMessage('Failed to rename subject.');
       }
       setCategoryLoading(false);
       return;
@@ -249,9 +248,9 @@ export function SessionHistory({
 
     if (sessError) {
       console.error('Error updating sessions category', sessError);
-      setCategoryMessage('Category renamed, but failed to update some sessions.');
+      setCategoryMessage('Subject renamed, but failed to update some sessions.');
     } else {
-      setCategoryMessage('Category renamed.');
+      setCategoryMessage('Subject renamed.');
       setSessions((prev) =>
         prev.map((s) =>
           s.category === oldName ? { ...s, category: newName } : s
@@ -277,7 +276,7 @@ export function SessionHistory({
 
     if (
       !confirm(
-        `Delete category "${name}"? Sessions using it will be set to "General".`
+        `Delete subject "${name}"? Sessions using it will be set to "General".`
       )
     ) {
       return;
@@ -294,7 +293,7 @@ export function SessionHistory({
 
     if (sessError) {
       console.error('Error updating sessions for deleted category', sessError);
-      setCategoryMessage('Failed to update sessions for this category.');
+      setCategoryMessage('Failed to update sessions for this subject.');
       setCategoryLoading(false);
       return;
     }
@@ -307,7 +306,7 @@ export function SessionHistory({
 
     if (deleteError) {
       console.error('Error deleting category', deleteError);
-      setCategoryMessage('Failed to delete category.');
+      setCategoryMessage('Failed to delete subject.');
     } else {
       setCategories((prev) => prev.filter((c) => c.name !== name));
       setSessions((prev) =>
@@ -318,14 +317,14 @@ export function SessionHistory({
       if (selectedCategory === name) {
         setSelectedCategory('All');
       }
-      setCategoryMessage('Category deleted.');
+      setCategoryMessage('Subject deleted.');
     }
 
     setCategoryLoading(false);
     onCategoriesChanged?.();
   };
 
-  // ---------- Rendu ----------
+  // ---------- Render ----------
 
   if (loading) {
     return (
@@ -351,7 +350,6 @@ export function SessionHistory({
         darkMode ? 'bg-slate-800' : 'bg-white'
       } rounded-2xl shadow-xl p-8 w-full max-w-2xl`}
     >
-      {/* Header + filtre + total */}
       <div className="flex items-start justify-between mb-6 gap-4">
         <div className="space-y-2">
           <h2
@@ -362,11 +360,12 @@ export function SessionHistory({
             Session History
           </h2>
 
+          {/* Subject filter */}
           <div className="flex items-center gap-2 text-sm">
             <span
               className={darkMode ? 'text-gray-400' : 'text-gray-600'}
             >
-              Category:
+              Subject:
             </span>
             <select
               value={selectedCategory}
@@ -379,7 +378,7 @@ export function SessionHistory({
             >
               {allCategoryOptions.map((name) => (
                 <option key={name} value={name}>
-                  {name === 'All' ? 'All categories' : name}
+                  {name === 'All' ? 'All subjects' : name}
                 </option>
               ))}
             </select>
@@ -438,7 +437,7 @@ export function SessionHistory({
         )}
       </div>
 
-      {/* Liste des sessions */}
+      {/* Sessions list */}
       {filteredSessions.length === 0 ? (
         <div className="text-center py-12">
           <Clock
@@ -449,7 +448,7 @@ export function SessionHistory({
           <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
             {selectedCategory === 'All'
               ? 'No sessions yet. Start your first timer!'
-              : 'No sessions for this category yet.'}
+              : 'No sessions for this subject yet.'}
           </p>
         </div>
       ) : (
@@ -529,17 +528,16 @@ export function SessionHistory({
         </div>
       )}
 
-      {/* Gestion des catégories en BAS du card */}
+      {/* Manage Subjects */}
       <div className="mt-6 pt-4 border-t border-gray-200 dark:border-slate-700">
         <h3
           className={`text-sm font-semibold mb-3 ${
             darkMode ? 'text-white' : 'text-gray-900'
           }`}
         >
-          Manage Categories
+          Manage Subjects
         </h3>
 
-        {/* Ajout */}
         <form
           onSubmit={handleAddCategory}
           className="space-y-2 text-sm mb-3"
@@ -549,7 +547,7 @@ export function SessionHistory({
               type="text"
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
-              placeholder="New category name"
+              placeholder="New subject name"
               className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                 darkMode
                   ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
@@ -561,7 +559,7 @@ export function SessionHistory({
               value={newCategoryColor}
               onChange={(e) => setNewCategoryColor(e.target.value)}
               className="w-12 h-10 rounded cursor-pointer border border-gray-300"
-              title="Category color"
+              title="Subject color"
             />
             <button
               type="submit"
@@ -573,7 +571,6 @@ export function SessionHistory({
           </div>
         </form>
 
-        {/* Liste des catégories */}
         {categories.length > 0 && (
           <div className="text-xs space-y-1 max-h-32 overflow-y-auto">
             {categories.map((cat) => (
