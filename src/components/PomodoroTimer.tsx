@@ -1,18 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Save } from 'lucide-react';
-import { supabase, Category } from '../lib/supabase';
+import { supabase, Category, Lecture } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 interface PomodoroTimerProps {
   onSessionComplete: () => void;
   darkMode?: boolean;
   categoriesVersion?: number;
+  lecturesVersion?: number;
 }
 
 export function PomodoroTimer({
   onSessionComplete,
   darkMode = false,
   categoriesVersion = 0,
+  lecturesVersion = 0,
 }: PomodoroTimerProps) {
   const [sessionName, setSessionName] = useState('');
   const [minutes, setMinutes] = useState(25);
@@ -22,13 +24,19 @@ export function PomodoroTimer({
   const [isSaving, setIsSaving] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
 
-  const [category, setCategory] = useState('General');
+  const [category, setCategory] = useState('General'); // subject
   const [categories, setCategories] = useState<Category[]>([]);
+
+  const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [selectedLectureId, setSelectedLectureId] = useState<string | 'none'>(
+    'none'
+  );
 
   const intervalRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { user } = useAuth();
 
+  // Load subjects
   useEffect(() => {
     const loadCategories = async () => {
       if (!user) return;
@@ -46,6 +54,33 @@ export function PomodoroTimer({
     loadCategories();
   }, [user, categoriesVersion]);
 
+  // Load lectures for current user + subject
+  useEffect(() => {
+    const loadLectures = async () => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('lectures')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('subject_name', category)
+        .order('created_at', { ascending: true });
+
+      if (!error && data) {
+        setLectures(data);
+      } else {
+        setLectures([]);
+      }
+
+      setSelectedLectureId('none');
+    };
+
+    if (category) {
+      loadLectures();
+    }
+  }, [user, category, lecturesVersion]);
+
+  // Timer
   useEffect(() => {
     if (isRunning) {
       intervalRef.current = window.setInterval(() => {
@@ -71,6 +106,7 @@ export function PomodoroTimer({
     };
   }, [isRunning]);
 
+  // End of timer
   useEffect(() => {
     if (minutes === 0 && seconds === 0 && initialMinutes > 0 && !isFinished) {
       setIsRunning(false);
@@ -133,12 +169,18 @@ export function PomodoroTimer({
 
     setIsSaving(true);
 
+    const lectureIdToSave =
+      selectedLectureId && selectedLectureId !== 'none'
+        ? selectedLectureId
+        : null;
+
     const { error } = await supabase.from('timer_sessions').insert({
       user_id: user.id,
       name: sessionName || 'Pomodoro Session',
       duration_minutes: totalMinutes,
       completed_at: new Date().toISOString(),
       category: (category || 'General').trim(),
+      lecture_id: lectureIdToSave,
     });
 
     if (error) {
@@ -162,6 +204,8 @@ export function PomodoroTimer({
   const categoryColor =
     categories.find((c) => c.name === category)?.color || '#3b82f6';
 
+  const lecturesForSelect = lectures;
+
   return (
     <div
       className={`${
@@ -170,6 +214,7 @@ export function PomodoroTimer({
     >
       <audio ref={audioRef} src="/timer-finished.mp3" preload="auto" />
 
+      {/* Session name */}
       <div className="mb-6">
         <label
           htmlFor="sessionName"
@@ -193,8 +238,8 @@ export function PomodoroTimer({
         />
       </div>
 
-      {/* Subject selection (UI only) */}
-      <div className="mb-6">
+      {/* Subject */}
+      <div className="mb-4">
         <label
           htmlFor="category"
           className={`block text-sm font-medium ${
@@ -228,6 +273,40 @@ export function PomodoroTimer({
         </div>
       </div>
 
+      {/* Lecture select */}
+      <div className="mb-6">
+        <label
+          htmlFor="lecture"
+          className={`block text-sm font-medium ${
+            darkMode ? 'text-gray-300' : 'text-gray-700'
+          } mb-2`}
+        >
+          Lecture (optional)
+        </label>
+        <select
+          id="lecture"
+          value={selectedLectureId}
+          onChange={(e) =>
+            setSelectedLectureId(
+              e.target.value === 'none' ? 'none' : e.target.value
+            )
+          }
+          className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+            darkMode
+              ? 'bg-slate-700 border-slate-600 text-white'
+              : 'border-gray-300'
+          }`}
+        >
+          <option value="none">No lecture selected</option>
+          {lecturesForSelect.map((lecture) => (
+            <option key={lecture.id} value={lecture.id}>
+              {lecture.title}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Duration */}
       <div className="mb-6">
         <label
           className={`block text-sm font-medium ${
@@ -288,6 +367,7 @@ export function PomodoroTimer({
         </div>
       </div>
 
+      {/* Circle timer */}
       <div className="relative mb-8">
         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 200 200">
           <circle
@@ -331,6 +411,7 @@ export function PomodoroTimer({
         </div>
       </div>
 
+      {/* Buttons */}
       <div className="flex gap-3">
         {!isRunning ? (
           <button
