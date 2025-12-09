@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 interface PomodoroTimerProps {
   onSessionComplete: () => void;
   darkMode?: boolean;
-  categoriesVersion?: number; // 👈 pour recharger les catégories quand elles changent
+  categoriesVersion?: number;
 }
 
 export function PomodoroTimer({
@@ -29,7 +29,6 @@ export function PomodoroTimer({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { user } = useAuth();
 
-  // Charger les catégories pour le select
   useEffect(() => {
     const loadCategories = async () => {
       if (!user) return;
@@ -47,7 +46,6 @@ export function PomodoroTimer({
     loadCategories();
   }, [user, categoriesVersion]);
 
-  // Timer
   useEffect(() => {
     if (isRunning) {
       intervalRef.current = window.setInterval(() => {
@@ -73,7 +71,6 @@ export function PomodoroTimer({
     };
   }, [isRunning]);
 
-  // Fin du timer
   useEffect(() => {
     if (minutes === 0 && seconds === 0 && initialMinutes > 0 && !isFinished) {
       setIsRunning(false);
@@ -173,7 +170,6 @@ export function PomodoroTimer({
     >
       <audio ref={audioRef} src="/timer-finished.mp3" preload="auto" />
 
-      {/* Session name */}
       <div className="mb-6">
         <label
           htmlFor="sessionName"
@@ -197,7 +193,7 @@ export function PomodoroTimer({
         />
       </div>
 
-      {/* Catégorie : juste le choix pour la session */}
+      {/* Subject selection (UI only) */}
       <div className="mb-6">
         <label
           htmlFor="category"
@@ -205,7 +201,7 @@ export function PomodoroTimer({
             darkMode ? 'text-gray-300' : 'text-gray-700'
           } mb-2`}
         >
-          Category
+          Subject
         </label>
         <div className="flex items-center gap-2">
           <span
@@ -232,7 +228,6 @@ export function PomodoroTimer({
         </div>
       </div>
 
-      {/* Duration */}
       <div className="mb-6">
         <label
           className={`block text-sm font-medium ${
@@ -293,7 +288,6 @@ export function PomodoroTimer({
         </div>
       </div>
 
-      {/* Timer cercle */}
       <div className="relative mb-8">
         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 200 200">
           <circle
@@ -330,13 +324,13 @@ export function PomodoroTimer({
                   : 'text-gray-900'
               }`}
             >
-              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+              {String(minutes).padStart(2, '0')}:
+              {String(seconds).padStart(2, '0')}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Boutons */}
       <div className="flex gap-3">
         {!isRunning ? (
           <button
