@@ -10,8 +10,9 @@ function App() {
   const { user, loading, signOut } = useAuth();
   const [refreshHistory, setRefreshHistory] = useState(0);
   const [activeTab, setActiveTab] = useState<'timer' | 'calendar'>('timer');
+  const [categoriesVersion, setCategoriesVersion] = useState(0); // 👈 NEW
 
-  // 🔥 Dark mode persisté
+  // Dark mode persistant
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === 'undefined') return false;
 
@@ -108,27 +109,35 @@ function App() {
           </div>
         </div>
 
-        {/* 🧠 IMPORTANT : on rend TOUJOURS les deux, on joue seulement sur hidden */}
         <div className="space-y-6">
           {/* Bloc Timer + History */}
           <div className={activeTab === 'timer' ? 'block' : 'hidden'}>
             <div className="grid lg:grid-cols-2 gap-6 items-start">
               <div className="flex justify-center">
                 <PomodoroTimer
-                  onSessionComplete={() =>
-                    setRefreshHistory((prev) => prev + 1)
-                  }
+                  onSessionComplete={() => setRefreshHistory((prev) => prev + 1)}
                   darkMode={darkMode}
+                  categoriesVersion={categoriesVersion}   // 👈 NEW
                 />
               </div>
               <div className="flex justify-center">
-                <SessionHistory refresh={refreshHistory} darkMode={darkMode} />
+                <SessionHistory
+                  refresh={refreshHistory}
+                  darkMode={darkMode}
+                  onCategoriesChanged={() =>
+                    setCategoriesVersion((prev) => prev + 1) // 👈 NEW
+                  }
+                />
               </div>
             </div>
           </div>
 
           {/* Bloc Calendar */}
-          <div className={activeTab === 'calendar' ? 'flex justify-center' : 'hidden'}>
+          <div
+            className={
+              activeTab === 'calendar' ? 'flex justify-center' : 'hidden'
+            }
+          >
             <StudyCalendar refresh={refreshHistory} darkMode={darkMode} />
           </div>
         </div>
