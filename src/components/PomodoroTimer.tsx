@@ -1,14 +1,19 @@
-import { useState, useEffect, useRef, FormEvent } from 'react';
-import { Play, Pause, RotateCcw, Save, Plus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Play, Pause, RotateCcw, Save } from 'lucide-react';
 import { supabase, Category } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 interface PomodoroTimerProps {
   onSessionComplete: () => void;
   darkMode?: boolean;
+  categoriesVersion?: number; // 👈 pour recharger les catégories quand elles changent
 }
 
-export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroTimerProps) {
+export function PomodoroTimer({
+  onSessionComplete,
+  darkMode = false,
+  categoriesVersion = 0,
+}: PomodoroTimerProps) {
   const [sessionName, setSessionName] = useState('');
   const [minutes, setMinutes] = useState(25);
   const [seconds, setSeconds] = useState(0);
@@ -17,23 +22,14 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
   const [isSaving, setIsSaving] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
 
-  // Catégories
   const [category, setCategory] = useState('General');
   const [categories, setCategories] = useState<Category[]>([]);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryColor, setNewCategoryColor] = useState('#3b82f6');
-  const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
-  const [categoryLoading, setCategoryLoading] = useState(false);
-
-  // Rename
-  const [editingCategory, setEditingCategory] = useState<string | null>(null);
-  const [editingCategoryName, setEditingCategoryName] = useState('');
 
   const intervalRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { user } = useAuth();
 
-  // Charger les catégories de l'utilisateur
+  // Charger les catégories pour le select
   useEffect(() => {
     const loadCategories = async () => {
       if (!user) return;
@@ -49,7 +45,7 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
     };
 
     loadCategories();
-  }, [user]);
+  }, [user, categoriesVersion]);
 
   // Timer
   useEffect(() => {
@@ -77,7 +73,7 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
     };
   }, [isRunning]);
 
-  // Détection de fin : 00:00
+  // Fin du timer
   useEffect(() => {
     if (minutes === 0 && seconds === 0 && initialMinutes > 0 && !isFinished) {
       setIsRunning(false);
@@ -88,11 +84,7 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
 
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
-        audioRef.current
-          .play()
-          .catch(() => {
-            // navigateur peut bloquer l'auto-play, on ignore
-          });
+        audioRef.current.play().catch(() => {});
       }
     }
   }, [minutes, seconds, initialMinutes, isFinished]);
@@ -131,169 +123,10 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
     }
   };
 
-  // Ajout d'une catégorie
-  const handleAddCategory = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    const name = newCategoryName.trim();
-    if (!name) {
-      setCategoryMessage('Category name is required.');
-      return;
-    }
-
-    setCategoryLoading(true);
-    setCategoryMessage(null);
-
-    const { data, error } = await supabase
-      .from('categories')
-      .insert({
-        user_id: user.id,
-        name,
-        color: newCategoryColor || '#3b82f6',
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error inserting category', error);
-      if (error.message.includes('categories_user_id_name_idx')) {
-        setCategoryMessage('This category already exists.');
-      } else {
-        setCategoryMessage(`Failed to add category: ${error.message}`);
-      }
-    } else if (data) {
-      setCategories((prev) => [...prev, data]);
-      setCategory(data.name);
-      setNewCategoryName('');
-      setCategoryMessage('Category added.');
-    }
-
-    setCategoryLoading(false);
-  };
-
-  // Démarrer le rename
-  const startEditingCategory = (name: string) => {
-    setEditingCategory(name);
-    setEditingCategoryName(name);
-    setCategoryMessage(null);
-  };
-
-  // Valider le rename
-  const handleRenameCategory = async (e: FormEvent, oldName: string) => {
-    e.preventDefault();
-    if (!user) return;
-
-    const newName = editingCategoryName.trim();
-    if (!newName) {
-      setCategoryMessage('Category name is required.');
-      return;
-    }
-
-    if (newName === oldName) {
-      setEditingCategory(null);
-      return;
-    }
-
-    setCategoryLoading(true);
-    setCategoryMessage(null);
-
-    // Update dans la table categories
-    const { error: catError } = await supabase
-      .from('categories')
-      .update({ name: newName })
-      .eq('user_id', user.id)
-      .eq('name', oldName);
-
-    if (catError) {
-      console.error('Error renaming category', catError);
-      if (catError.message.includes('categories_user_id_name_idx')) {
-        setCategoryMessage('A category with this name already exists.');
-      } else {
-        setCategoryMessage('Failed to rename category.');
-      }
-      setCategoryLoading(false);
-      return;
-    }
-
-    // Mettre à jour toutes les sessions avec l'ancien nom
-    const { error: sessError } = await supabase
-      .from('timer_sessions')
-      .update({ category: newName })
-      .eq('user_id', user.id)
-      .eq('category', oldName);
-
-    if (sessError) {
-      console.error('Error updating sessions category', sessError);
-      setCategoryMessage('Category renamed, but failed to update some sessions.');
-    } else {
-      setCategoryMessage('Category renamed.');
-    }
-
-    // Sync local
-    setCategories((prev) =>
-      prev.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
-    );
-    if (category === oldName) {
-      setCategory(newName);
-    }
-
-    setEditingCategory(null);
-    setCategoryLoading(false);
-  };
-
-  // Suppression d'une catégorie : on remet les sessions sur "General"
-  const handleDeleteCategory = async (name: string) => {
-    if (!user) return;
-
-    if (!confirm(`Delete category "${name}"? Sessions using it will be set to "General".`)) {
-      return;
-    }
-
-    setCategoryLoading(true);
-    setCategoryMessage(null);
-
-    // Mettre à jour les sessions
-    const { error: sessError } = await supabase
-      .from('timer_sessions')
-      .update({ category: 'General' })
-      .eq('user_id', user.id)
-      .eq('category', name);
-
-    if (sessError) {
-      console.error('Error updating sessions for deleted category', sessError);
-      setCategoryMessage('Failed to update sessions for this category.');
-      setCategoryLoading(false);
-      return;
-    }
-
-    // Supprimer la catégorie
-    const { error: deleteError } = await supabase
-      .from('categories')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('name', name);
-
-    if (deleteError) {
-      console.error('Error deleting category', deleteError);
-      setCategoryMessage('Failed to delete category.');
-    } else {
-      setCategories((prev) => prev.filter((c) => c.name !== name));
-      if (category === name) {
-        setCategory('General');
-      }
-      setCategoryMessage('Category deleted.');
-    }
-
-    setCategoryLoading(false);
-  };
-
   const handleSave = async () => {
     if (!user) return;
 
-    // Temps écoulé en secondes
     const totalSeconds = initialMinutes * 60 - (minutes * 60 + seconds);
-
     if (totalSeconds < 60) {
       alert('Session too short to save!');
       return;
@@ -338,7 +171,6 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
         darkMode ? 'bg-slate-800' : 'bg-white'
       } rounded-2xl shadow-xl p-8 w-full max-w-md`}
     >
-      {/* Son de fin */}
       <audio ref={audioRef} src="/timer-finished.mp3" preload="auto" />
 
       {/* Session name */}
@@ -365,158 +197,39 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
         />
       </div>
 
-      {/* Category */}
-      <div className="mb-6 space-y-3">
-        <div>
-          <label
-            htmlFor="category"
-            className={`block text-sm font-medium ${
-              darkMode ? 'text-gray-300' : 'text-gray-700'
-            } mb-2`}
-          >
-            Category
-          </label>
-          <div className="flex gap-2 items-center">
-            <span
-              className="inline-block w-4 h-4 rounded-full border border-gray-300"
-              style={{ backgroundColor: categoryColor }}
-            />
-            <select
-              id="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                darkMode
-                  ? 'bg-slate-700 border-slate-600 text-white'
-                  : 'border-gray-300'
-              }`}
-            >
-              <option value="General">General</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.name}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Ajouter une catégorie */}
-        <form onSubmit={handleAddCategory} className="space-y-2 text-sm">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              placeholder="New category name"
-              className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                darkMode
-                  ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
-                  : 'border-gray-300'
-              }`}
-            />
-            <input
-              type="color"
-              value={newCategoryColor}
-              onChange={(e) => setNewCategoryColor(e.target.value)}
-              className="w-12 h-10 rounded cursor-pointer border border-gray-300"
-              title="Category color"
-            />
-            <button
-              type="submit"
-              disabled={categoryLoading}
-              className="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Plus className="w-4 h-4" />
-              Add
-            </button>
-          </div>
-        </form>
-
-        {/* Liste des catégories avec rename + delete */}
-        {categories.length > 0 && (
-          <div className="text-xs space-y-1 mt-2 max-h-32 overflow-y-auto">
-            {categories.map((cat) => (
-              <div
-                key={cat.id}
-                className={`flex items-center justify-between px-2 py-1 rounded ${
-                  darkMode ? 'bg-slate-700' : 'bg-gray-100'
-                }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className="inline-block w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: cat.color }}
-                  />
-                  {editingCategory === cat.name ? (
-                    <form
-                      onSubmit={(e) => handleRenameCategory(e, cat.name)}
-                      className="flex items-center gap-2 min-w-0"
-                    >
-                      <input
-                        type="text"
-                        value={editingCategoryName}
-                        onChange={(e) => setEditingCategoryName(e.target.value)}
-                        className={`px-2 py-1 border rounded text-xs min-w-0 ${
-                          darkMode
-                            ? 'bg-slate-800 border-slate-600 text-gray-100'
-                            : 'bg-white border-gray-300 text-gray-800'
-                        }`}
-                      />
-                      <button
-                        type="submit"
-                        disabled={categoryLoading}
-                        className="text-green-500 hover:text-green-700"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingCategory(null)}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
-                        Cancel
-                      </button>
-                    </form>
-                  ) : (
-                    <span className="truncate">{cat.name}</span>
-                  )}
-                </div>
-
-                {editingCategory !== cat.name && (
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => startEditingCategory(cat.name)}
-                      className="text-blue-500 hover:text-blue-700"
-                    >
-                      Rename
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteCategory(cat.name)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {categoryMessage && (
-          <p
-            className={`text-xs ${
-              categoryMessage.toLowerCase().includes('fail')
-                ? 'text-red-500'
-                : 'text-gray-500'
+      {/* Catégorie : juste le choix pour la session */}
+      <div className="mb-6">
+        <label
+          htmlFor="category"
+          className={`block text-sm font-medium ${
+            darkMode ? 'text-gray-300' : 'text-gray-700'
+          } mb-2`}
+        >
+          Category
+        </label>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block w-4 h-4 rounded-full border border-gray-300"
+            style={{ backgroundColor: categoryColor }}
+          />
+          <select
+            id="category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              darkMode
+                ? 'bg-slate-700 border-slate-600 text-white'
+                : 'border-gray-300'
             }`}
           >
-            {categoryMessage}
-          </p>
-        )}
+            <option value="General">General</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.name}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Duration */}
@@ -580,7 +293,7 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
         </div>
       </div>
 
-      {/* Timer cercle + temps */}
+      {/* Timer cercle */}
       <div className="relative mb-8">
         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 200 200">
           <circle
@@ -617,8 +330,7 @@ export function PomodoroTimer({ onSessionComplete, darkMode = false }: PomodoroT
                   : 'text-gray-900'
               }`}
             >
-              {String(minutes).padStart(2, '0')}:
-              {String(seconds).padStart(2, '0')}
+              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
             </div>
           </div>
         </div>
