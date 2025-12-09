@@ -1,12 +1,13 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { Clock, Calendar, Trash2 } from 'lucide-react';
-import { supabase, TimerSession, Category } from '../lib/supabase';
+import { supabase, TimerSession, Category, Lecture } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SessionHistoryProps {
   refresh: number;
   darkMode?: boolean;
   onCategoriesChanged?: () => void;
+  onLecturesChanged?: () => void;
 }
 
 interface CategoryTotal {
@@ -18,18 +19,31 @@ export function SessionHistory({
   refresh,
   darkMode = false,
   onCategoriesChanged,
+  onLecturesChanged,
 }: SessionHistoryProps) {
   const [sessions, setSessions] = useState<TimerSession[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [lectures, setLectures] = useState<Lecture[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
+  // Subjects management
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#3b82f6');
   const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
+
+  // Lectures management
+  const [selectedSubjectForLectures, setSelectedSubjectForLectures] =
+    useState<string>('General');
+  const [newLectureTitle, setNewLectureTitle] = useState('');
+  const [newLectureTargetMinutes, setNewLectureTargetMinutes] = useState<
+    number | ''
+  >('');
+  const [lectureMessage, setLectureMessage] = useState<string | null>(null);
+  const [lectureLoading, setLectureLoading] = useState(false);
 
   const { user } = useAuth();
 
@@ -63,12 +77,27 @@ export function SessionHistory({
     }
   };
 
+  const loadLectures = async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('lectures')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
+
+    if (!error && data) {
+      setLectures(data);
+    }
+  };
+
   useEffect(() => {
     loadSessions();
   }, [user, refresh]);
 
   useEffect(() => {
     loadCategories();
+    loadLectures();
   }, [user]);
 
   const handleDeleteSession = async (id: string) => {
@@ -116,6 +145,11 @@ export function SessionHistory({
     categoryColorMap[cat.name] = cat.color;
   });
 
+  const lectureMap: Record<string, Lecture> = {};
+  lectures.forEach((lecture) => {
+    lectureMap[lecture.id] = lecture;
+  });
+
   const sessionCategoryNames = Array.from(
     new Set(sessions.map((s) => s.category || 'General'))
   );
@@ -157,7 +191,7 @@ export function SessionHistory({
     {}
   );
 
-  // ---------- Subjects (categories) management ----------
+  // ---------- Subjects management ----------
 
   const handleAddCategory = async (e: FormEvent) => {
     e.preventDefault();
@@ -258,12 +292,31 @@ export function SessionHistory({
       );
     }
 
+    const { error: lectureError } = await supabase
+      .from('lectures')
+      .update({ subject_name: newName })
+      .eq('user_id', user.id)
+      .eq('subject_name', oldName);
+
+    if (lectureError) {
+      console.error('Error updating lectures subject', lectureError);
+    } else {
+      setLectures((prev) =>
+        prev.map((l) =>
+          l.subject_name === oldName ? { ...l, subject_name: newName } : l
+        )
+      );
+    }
+
     setCategories((prev) =>
       prev.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
     );
 
     if (selectedCategory === oldName) {
       setSelectedCategory(newName);
+    }
+    if (selectedSubjectForLectures === oldName) {
+      setSelectedSubjectForLectures(newName);
     }
 
     setEditingCategory(null);
@@ -276,7 +329,7 @@ export function SessionHistory({
 
     if (
       !confirm(
-        `Delete subject "${name}"? Sessions using it will be set to "General".`
+        `Delete subject "${name}"? Sessions using it will be set to "General" and lectures for this subject will be deleted.`
       )
     ) {
       return;
@@ -287,15 +340,25 @@ export function SessionHistory({
 
     const { error: sessError } = await supabase
       .from('timer_sessions')
-      .update({ category: 'General' })
+      .update({ category: 'General', lecture_id: null })
       .eq('user_id', user.id)
       .eq('category', name);
 
     if (sessError) {
-      console.error('Error updating sessions for deleted category', sessError);
+      console.error('Error updating sessions for deleted subject', sessError);
       setCategoryMessage('Failed to update sessions for this subject.');
       setCategoryLoading(false);
       return;
+    }
+
+    const { error: deleteLecturesError } = await supabase
+      .from('lectures')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('subject_name', name);
+
+    if (deleteLecturesError) {
+      console.error('Error deleting lectures for subject', deleteLecturesError);
     }
 
     const { error: deleteError } = await supabase
@@ -305,24 +368,119 @@ export function SessionHistory({
       .eq('name', name);
 
     if (deleteError) {
-      console.error('Error deleting category', deleteError);
+      console.error('Error deleting subject', deleteError);
       setCategoryMessage('Failed to delete subject.');
     } else {
       setCategories((prev) => prev.filter((c) => c.name !== name));
       setSessions((prev) =>
         prev.map((s) =>
-          s.category === name ? { ...s, category: 'General' } : s
+          s.category === name
+            ? { ...s, category: 'General', lecture_id: null }
+            : s
         )
+      );
+      setLectures((prev) =>
+        prev.filter((l) => l.subject_name !== name)
       );
       if (selectedCategory === name) {
         setSelectedCategory('All');
+      }
+      if (selectedSubjectForLectures === name) {
+        setSelectedSubjectForLectures('General');
       }
       setCategoryMessage('Subject deleted.');
     }
 
     setCategoryLoading(false);
     onCategoriesChanged?.();
+    onLecturesChanged?.();
   };
+
+  // ---------- Lectures management ----------
+
+  const handleAddLecture = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    const title = newLectureTitle.trim();
+    if (!title) {
+      setLectureMessage('Lecture title is required.');
+      return;
+    }
+
+    setLectureLoading(true);
+    setLectureMessage(null);
+
+    const { data, error } = await supabase
+      .from('lectures')
+      .insert({
+        user_id: user.id,
+        subject_name: selectedSubjectForLectures,
+        title,
+        target_minutes:
+          newLectureTargetMinutes === '' ? null : newLectureTargetMinutes,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error inserting lecture', error);
+      setLectureMessage('Failed to add lecture.');
+    } else if (data) {
+      setLectures((prev) => [...prev, data]);
+      setLectureMessage('Lecture added.');
+      setNewLectureTitle('');
+      setNewLectureTargetMinutes('');
+      onLecturesChanged?.();
+    }
+
+    setLectureLoading(false);
+  };
+
+  const handleDeleteLecture = async (lectureId: string) => {
+    if (!user) return;
+
+    if (!confirm('Delete this lecture? Sessions will keep their time.')) {
+      return;
+    }
+
+    setLectureLoading(true);
+    setLectureMessage(null);
+
+    const { error: sessError } = await supabase
+      .from('timer_sessions')
+      .update({ lecture_id: null })
+      .eq('user_id', user.id)
+      .eq('lecture_id', lectureId);
+
+    if (sessError) {
+      console.error('Error clearing lecture_id from sessions', sessError);
+      setLectureMessage('Failed to update sessions for this lecture.');
+      setLectureLoading(false);
+      return;
+    }
+
+    const { error: deleteError } = await supabase
+      .from('lectures')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('id', lectureId);
+
+    if (deleteError) {
+      console.error('Error deleting lecture', deleteError);
+      setLectureMessage('Failed to delete lecture.');
+    } else {
+      setLectures((prev) => prev.filter((l) => l.id !== lectureId));
+      setLectureMessage('Lecture deleted.');
+    }
+
+    setLectureLoading(false);
+    onLecturesChanged?.();
+  };
+
+  const lecturesForSelectedSubject = lectures.filter(
+    (l) => l.subject_name === selectedSubjectForLectures
+  );
 
   // ---------- Render ----------
 
@@ -350,6 +508,7 @@ export function SessionHistory({
         darkMode ? 'bg-slate-800' : 'bg-white'
       } rounded-2xl shadow-xl p-8 w-full max-w-2xl`}
     >
+      {/* Header + subject filter + totals */}
       <div className="flex items-start justify-between mb-6 gap-4">
         <div className="space-y-2">
           <h2
@@ -360,7 +519,6 @@ export function SessionHistory({
             Session History
           </h2>
 
-          {/* Subject filter */}
           <div className="flex items-center gap-2 text-sm">
             <span
               className={darkMode ? 'text-gray-400' : 'text-gray-600'}
@@ -452,10 +610,12 @@ export function SessionHistory({
           </p>
         </div>
       ) : (
-        <div className="space-y-3 max-h-[350px] overflow-y-auto">
+        <div className="space-y-3 max-h-[300px] overflow-y-auto">
           {filteredSessions.map((session) => {
             const catName = session.category || 'General';
             const catColor = categoryColorMap[catName];
+            const lecture =
+              session.lecture_id ? lectureMap[session.lecture_id] : undefined;
 
             return (
               <div
@@ -475,7 +635,8 @@ export function SessionHistory({
                     {session.name}
                   </h3>
 
-                  <div className="flex items-center gap-2 mt-1 text-xs">
+                  <div className="flex flex-wrap items-center gap-2 mt-1 text-xs">
+                    {/* Subject pill */}
                     <span
                       className="inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] max-w-[140px] truncate"
                       style={
@@ -490,6 +651,19 @@ export function SessionHistory({
                     >
                       {catName}
                     </span>
+
+                    {/* Lecture pill */}
+                    {lecture && (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] max-w-[180px] truncate ${
+                          darkMode
+                            ? 'bg-slate-800 text-gray-100'
+                            : 'bg-white text-gray-800'
+                        } border border-gray-300/50`}
+                      >
+                        {lecture.title}
+                      </span>
+                    )}
                   </div>
 
                   <div
@@ -654,6 +828,139 @@ export function SessionHistory({
             }`}
           >
             {categoryMessage}
+          </p>
+        )}
+      </div>
+
+      {/* Manage Lectures */}
+      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-slate-700">
+        <h3
+          className={`text-sm font-semibold mb-3 ${
+            darkMode ? 'text-white' : 'text-gray-900'
+          }`}
+        >
+          Manage Lectures
+        </h3>
+
+        {/* Select subject for lectures */}
+        <div className="mb-3 flex items-center gap-2 text-sm">
+          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+            Subject:
+          </span>
+          <select
+            value={selectedSubjectForLectures}
+            onChange={(e) => setSelectedSubjectForLectures(e.target.value)}
+            className={`px-2 py-1 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              darkMode
+                ? 'bg-slate-700 border-slate-600 text-gray-100'
+                : 'bg-white border-gray-300 text-gray-800'
+            }`}
+          >
+            <option value="General">General</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.name}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Add lecture */}
+        <form
+          onSubmit={handleAddLecture}
+          className="space-y-2 text-sm mb-3"
+        >
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newLectureTitle}
+              onChange={(e) => setNewLectureTitle(e.target.value)}
+              placeholder="Lecture title"
+              className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                darkMode
+                  ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
+                  : 'border-gray-300'
+              }`}
+            />
+            <input
+              type="number"
+              min={1}
+              value={newLectureTargetMinutes}
+              onChange={(e) =>
+                setNewLectureTargetMinutes(
+                  e.target.value === '' ? '' : Number(e.target.value)
+                )
+              }
+              placeholder="Target m"
+              className={`w-24 px-2 py-2 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                darkMode
+                  ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
+                  : 'border-gray-300'
+              }`}
+            />
+            <button
+              type="submit"
+              disabled={lectureLoading}
+              className="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Add
+            </button>
+          </div>
+        </form>
+
+        {/* List lectures */}
+        {lecturesForSelectedSubject.length > 0 ? (
+          <div className="text-xs space-y-1 max-h-32 overflow-y-auto">
+            {lecturesForSelectedSubject.map((lecture) => (
+              <div
+                key={lecture.id}
+                className={`flex items-center justify-between px-2 py-1 rounded ${
+                  darkMode ? 'bg-slate-700' : 'bg-gray-100'
+                }`}
+              >
+                <div className="flex flex-col min-w-0">
+                  <span className="truncate font-medium">
+                    {lecture.title}
+                  </span>
+                  {lecture.target_minutes != null && (
+                    <span
+                      className={
+                        darkMode ? 'text-gray-400 text-[11px]' : 'text-gray-500 text-[11px]'
+                      }
+                    >
+                      Target: {lecture.target_minutes} min
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteLecture(lecture.id)}
+                  className="text-red-500 hover:text-red-700 ml-2 flex-shrink-0"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p
+            className={`text-xs ${
+              darkMode ? 'text-gray-500' : 'text-gray-500'
+            }`}
+          >
+            No lectures for this subject yet.
+          </p>
+        )}
+
+        {lectureMessage && (
+          <p
+            className={`mt-2 text-xs ${
+              lectureMessage.toLowerCase().includes('fail')
+                ? 'text-red-500'
+                : 'text-gray-500'
+            }`}
+          >
+            {lectureMessage}
           </p>
         )}
       </div>
