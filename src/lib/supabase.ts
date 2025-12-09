@@ -16,7 +16,8 @@ export interface TimerSession {
   duration_minutes: number;
   completed_at: string;
   created_at: string;
-  category: string; // déjà ajouté
+  category?: string | null;    // subject name
+  lecture_id?: string | null;  // link to Lecture
 }
 
 export interface Category {
@@ -24,5 +25,14 @@ export interface Category {
   user_id: string;
   name: string;
   color: string;
+  created_at: string;
+}
+
+export interface Lecture {
+  id: string;
+  user_id: string;
+  subject_name: string;    // = categories.name
+  title: string;
+  target_minutes: number | null;
   created_at: string;
 }
