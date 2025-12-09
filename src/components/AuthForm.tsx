@@ -30,18 +30,18 @@ export function AuthForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md border border-gray-100">
         <div className="flex items-center justify-center mb-8">
-          <div className="bg-blue-600 p-3 rounded-full">
-            <LogIn className="w-8 h-8 text-white" />
+          <div className="bg-gradient-to-br from-blue-600 to-cyan-600 p-4 rounded-2xl shadow-lg">
+            <LogIn className="w-10 h-10 text-white" />
           </div>
         </div>
 
-        <h1 className="text-3xl font-bold text-center text-gray-900 mb-2">
+        <h1 className="text-4xl font-bold text-center bg-gradient-to-r from-blue-700 to-cyan-700 bg-clip-text text-transparent mb-2">
           Pomodoro Timer
         </h1>
-        <p className="text-center text-gray-600 mb-8">
+        <p className="text-center text-gray-600 mb-8 text-lg">
           Track your focus sessions
         </p>
 
@@ -90,7 +90,7 @@ export function AuthForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Sign Up'}
           </button>
@@ -102,7 +102,7 @@ export function AuthForm() {
               setIsLogin(!isLogin);
               setError('');
             }}
-            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            className="text-blue-600 hover:text-cyan-600 text-sm font-semibold transition-colors"
           >
             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>

@@ -8,6 +8,8 @@ interface PomodoroTimerProps {
   darkMode?: boolean;
   categoriesVersion?: number;
   lecturesVersion?: number;
+  startLectureData?: { lectureId: string; subjectName: string } | null;
+  onLectureStarted?: () => void;
 }
 
 export function PomodoroTimer({
@@ -15,6 +17,8 @@ export function PomodoroTimer({
   darkMode = false,
   categoriesVersion = 0,
   lecturesVersion = 0,
+  startLectureData,
+  onLectureStarted,
 }: PomodoroTimerProps) {
   const [sessionName, setSessionName] = useState('');
   const [minutes, setMinutes] = useState(25);
@@ -79,6 +83,14 @@ export function PomodoroTimer({
       loadLectures();
     }
   }, [user, category, lecturesVersion]);
+
+  useEffect(() => {
+    if (startLectureData) {
+      setCategory(startLectureData.subjectName);
+      setSelectedLectureId(startLectureData.lectureId);
+      onLectureStarted?.();
+    }
+  }, [startLectureData, onLectureStarted]);
 
   // Timer
   useEffect(() => {
