@@ -6,11 +6,14 @@ import { SessionHistory } from './components/SessionHistory';
 import { StudyCalendar } from './components/StudyCalendar';
 import { ToDoLectures } from './components/ToDoLectures';
 import { LogOut, Timer, Moon, Sun } from 'lucide-react';
+import { ChatButton } from './components/ChatButton';
+
 
 function App() {
   const { user, loading, signOut } = useAuth();
   const [refreshHistory, setRefreshHistory] = useState(0);
   const [activeTab, setActiveTab] = useState<'timer' | 'calendar' | 'lectures'>('timer');
+  const [notesOpen, setNotesOpen] = useState(false);
   const [categoriesVersion, setCategoriesVersion] = useState(0);
   const [lecturesVersion, setLecturesVersion] = useState(0);
   const [startLectureData, setStartLectureData] = useState<{
@@ -184,6 +187,8 @@ function App() {
             }
           >
             <StudyCalendar refresh={refreshHistory} darkMode={darkMode} />
+            <ChatButton onClick={() => setNotesOpen(true)} />
+
           </div>
         </div>
       </div>
