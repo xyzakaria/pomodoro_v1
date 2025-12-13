@@ -5,7 +5,7 @@ interface ChatButtonProps {
   onClick: () => void;
 }
 
-const MESSAGES = ['Good luck 🍀', 'Meow', 'You got this 💪','bzz bzz',' dont eat me !'];
+const MESSAGES = ['Good luck 🍀', 'Meow', 'You got this !','bzz bzz',' dont eat me !'];
 
 export function ChatButton({ onClick }: ChatButtonProps) {
   const buttonRef = useRef<HTMLDivElement>(null);
