@@ -38,6 +38,7 @@ export function StudyCalendar({ refresh, darkMode }: StudyCalendarProps) {
 
   useEffect(() => {
     loadSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, currentDate, refresh]);
 
   const year = currentDate.getFullYear();
@@ -50,7 +51,7 @@ export function StudyCalendar({ refresh, darkMode }: StudyCalendarProps) {
   const getDailyMinutes = (day: number) => {
     const dateStr = new Date(year, month, day).toDateString();
     return sessions
-      .filter(session => new Date(session.completed_at).toDateString() === dateStr)
+      .filter((session) => new Date(session.completed_at).toDateString() === dateStr)
       .reduce((sum, session) => sum + session.duration_minutes, 0);
   };
 
@@ -60,7 +61,7 @@ export function StudyCalendar({ refresh, darkMode }: StudyCalendarProps) {
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -73,15 +74,29 @@ export function StudyCalendar({ refresh, darkMode }: StudyCalendarProps) {
     setCurrentDate(new Date(year, month + 1, 1));
   };
 
+  // New thresholds (study-realistic):
+  // 0 = none
+  // 1-60 = 1h
+  // 61-120 = 2h
+  // 121-240 = 4h
+  // 241-360 = 6h
+  // 361-480 = 8h
+  // 481+ = SPECIAL (violet)
   const getColorForMinutes = (minutes: number) => {
     if (minutes === 0) return darkMode ? 'bg-slate-700' : 'bg-gray-50';
-    if (minutes <= 25) return darkMode ? 'bg-blue-900' : 'bg-blue-100';
-    if (minutes <= 50) return darkMode ? 'bg-blue-800' : 'bg-blue-200';
-    if (minutes <= 75) return darkMode ? 'bg-blue-700' : 'bg-blue-300';
+
+    // SPECIAL: 8h+ (more than 480 minutes)
+    if (minutes > 480) return darkMode ? 'bg-violet-700' : 'bg-violet-300';
+
+    if (minutes <= 60) return darkMode ? 'bg-blue-950' : 'bg-blue-50';
+    if (minutes <= 120) return darkMode ? 'bg-blue-900' : 'bg-blue-100';
+    if (minutes <= 240) return darkMode ? 'bg-blue-800' : 'bg-blue-200';
+    if (minutes <= 360) return darkMode ? 'bg-blue-700' : 'bg-blue-300';
+    // 361-480 (8h)
     return darkMode ? 'bg-blue-600' : 'bg-blue-400';
   };
 
-  const calendarDays = [];
+  const calendarDays: Array<number | null> = [];
   for (let i = 0; i < startingDayOfWeek; i++) {
     calendarDays.push(null);
   }
@@ -140,7 +155,7 @@ export function StudyCalendar({ refresh, darkMode }: StudyCalendarProps) {
       </div>
 
       <div className="grid grid-cols-7 gap-1">
-        {dayNames.map(day => (
+        {dayNames.map((day) => (
           <div key={day} className="text-center font-semibold text-gray-600 dark:text-gray-400 text-xs py-1">
             {day}
           </div>
@@ -148,19 +163,26 @@ export function StudyCalendar({ refresh, darkMode }: StudyCalendarProps) {
 
         {calendarDays.map((day, index) => {
           const minutes = day ? getDailyMinutes(day) : 0;
+          const isSpecial = minutes > 480;
+
           return (
             <div
               key={index}
               className={`aspect-square rounded p-1 flex flex-col items-center justify-center text-center transition-all ${
                 day ? getColorForMinutes(minutes) : (darkMode ? 'bg-slate-700' : 'bg-gray-50')
-              } ${day && 'cursor-default'}`}
+              } ${day && 'cursor-default'} ${isSpecial ? 'ring-2 ring-violet-400/70 dark:ring-violet-300/60' : ''}`}
+              title={day ? `${minutes} minutes` : ''}
             >
               {day && (
                 <>
-                  <div className={`text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{day}</div>
+                  <div className={`text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    {day}
+                  </div>
                   <div
                     className={`text-xs font-bold mt-0.5 ${
-                      minutes === 0 ? (darkMode ? 'text-gray-500' : 'text-gray-400') : (darkMode ? 'text-white' : 'text-gray-900')
+                      minutes === 0
+                        ? (darkMode ? 'text-gray-500' : 'text-gray-400')
+                        : (darkMode ? 'text-white' : 'text-gray-900')
                     }`}
                   >
                     {minutes > 0 ? `${minutes}m` : '—'}
@@ -176,26 +198,41 @@ export function StudyCalendar({ refresh, darkMode }: StudyCalendarProps) {
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-semibold text-gray-900 dark:text-white">Legend</h3>
         </div>
-        <div className="grid grid-cols-5 gap-2">
+
+        <div className="grid grid-cols-7 gap-2">
           <div className="flex items-center gap-1">
-            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-slate-700' : 'bg-gray-50'}`}></div>
+            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-slate-700' : 'bg-gray-50'}`} />
             <span className="text-xs text-gray-600 dark:text-gray-400">None</span>
           </div>
+
           <div className="flex items-center gap-1">
-            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-blue-900' : 'bg-blue-100'}`}></div>
-            <span className="text-xs text-gray-600 dark:text-gray-400">1-25m</span>
+            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-blue-950' : 'bg-blue-50'}`} />
+            <span className="text-xs text-gray-600 dark:text-gray-400">1–60m</span>
           </div>
+
           <div className="flex items-center gap-1">
-            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-blue-800' : 'bg-blue-200'}`}></div>
-            <span className="text-xs text-gray-600 dark:text-gray-400">26-50m</span>
+            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-blue-900' : 'bg-blue-100'}`} />
+            <span className="text-xs text-gray-600 dark:text-gray-400">61–120m</span>
           </div>
+
           <div className="flex items-center gap-1">
-            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-blue-700' : 'bg-blue-300'}`}></div>
-            <span className="text-xs text-gray-600 dark:text-gray-400">51-75m</span>
+            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-blue-800' : 'bg-blue-200'}`} />
+            <span className="text-xs text-gray-600 dark:text-gray-400">2–4h</span>
           </div>
+
           <div className="flex items-center gap-1">
-            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-blue-600' : 'bg-blue-400'}`}></div>
-            <span className="text-xs text-gray-600 dark:text-gray-400">75m+</span>
+            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-blue-700' : 'bg-blue-300'}`} />
+            <span className="text-xs text-gray-600 dark:text-gray-400">4–6h</span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-blue-600' : 'bg-blue-400'}`} />
+            <span className="text-xs text-gray-600 dark:text-gray-400">6–8h</span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <div className={`w-4 h-4 rounded ${darkMode ? 'bg-violet-700' : 'bg-violet-300'}`} />
+            <span className="text-xs text-gray-600 dark:text-gray-400">8h+ ⭐</span>
           </div>
         </div>
       </div>
