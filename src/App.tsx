@@ -5,33 +5,34 @@ import { PomodoroTimer } from './components/PomodoroTimer';
 import { SessionHistory } from './components/SessionHistory';
 import { StudyCalendar } from './components/StudyCalendar';
 import { ToDoLectures } from './components/ToDoLectures';
-import { LogOut, Timer, Moon, Sun } from 'lucide-react';
 import { ChatButton } from './components/ChatButton';
-
+import { NotesPanel } from './components/NotesPanel';
+import { LogOut, Timer, Moon, Sun } from 'lucide-react';
 
 function App() {
   const { user, loading, signOut } = useAuth();
+
   const [refreshHistory, setRefreshHistory] = useState(0);
-  const [activeTab, setActiveTab] = useState<'timer' | 'calendar' | 'lectures'>('timer');
-  const [notesOpen, setNotesOpen] = useState(false);
+  const [activeTab, setActiveTab] =
+    useState<'timer' | 'calendar' | 'lectures'>('timer');
+
   const [categoriesVersion, setCategoriesVersion] = useState(0);
   const [lecturesVersion, setLecturesVersion] = useState(0);
+
   const [startLectureData, setStartLectureData] = useState<{
     lectureId: string;
     subjectName: string;
   } | null>(null);
 
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
+  // 📝 Notes (pilotées par le chat)
+  const [notesOpen, setNotesOpen] = useState(false);
 
+  // 🌙 Dark mode
+  const [darkMode, setDarkMode] = useState(() => {
     const stored = localStorage.getItem('theme');
     if (stored === 'dark') return true;
     if (stored === 'light') return false;
-
-    return (
-      window.matchMedia &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches
-    );
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
   useEffect(() => {
@@ -52,10 +53,8 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 flex items-center justify-center">
-        <div className="text-xl text-gray-600 dark:text-gray-400">
-          Loading...
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-gray-400">
+        Loading...
       </div>
     );
   }
@@ -70,8 +69,10 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 p-4 transition-colors duration-200">
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 p-4">
       <div className="max-w-7xl mx-auto">
+
+        {/* HEADER */}
         <header className="flex items-center justify-between mb-8 pt-4">
           <div className="flex items-center gap-3">
             <div className="bg-gradient-to-br from-blue-600 to-cyan-600 p-3 rounded-xl shadow-lg">
@@ -86,17 +87,19 @@ function App() {
               </p>
             </div>
           </div>
+
           <div className="flex items-center gap-3">
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className="p-2.5 hover:bg-white/20 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-xl transition-all hover:scale-105"
-              title={darkMode ? 'Light mode' : 'Dark mode'}
+              className="p-2.5 rounded-xl hover:bg-white/20 dark:hover:bg-white/10"
+              title="Toggle theme"
             >
-              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {darkMode ? <Sun /> : <Moon />}
             </button>
+
             <button
               onClick={signOut}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-xl transition-all shadow-sm hover:shadow-md"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-xl transition-all shadow-sm"
             >
               <LogOut className="w-4 h-4" />
               Sign Out
@@ -104,6 +107,7 @@ function App() {
           </div>
         </header>
 
+        {/* TABS */}
         <div className="mb-8">
           <div className="flex gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl shadow-lg p-1.5 w-fit">
             <button
@@ -139,59 +143,47 @@ function App() {
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className={activeTab === 'timer' ? 'block' : 'hidden'}>
-            <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="flex justify-center">
-                <PomodoroTimer
-                  onSessionComplete={() =>
-                    setRefreshHistory((prev) => prev + 1)
-                  }
-                  darkMode={darkMode}
-                  categoriesVersion={categoriesVersion}
-                  lecturesVersion={lecturesVersion}
-                  startLectureData={startLectureData}
-                  onLectureStarted={() => setStartLectureData(null)}
-                />
-              </div>
-              <div className="flex justify-center">
-                <SessionHistory
-                  refresh={refreshHistory}
-                  darkMode={darkMode}
-                  onCategoriesChanged={() =>
-                    setCategoriesVersion((prev) => prev + 1)
-                  }
-                  onLecturesChanged={() =>
-                    setLecturesVersion((prev) => prev + 1)
-                  }
-                />
-              </div>
-            </div>
-          </div>
+        {/* CONTENT */}
+        {activeTab === 'timer' && (
+          <div className="grid lg:grid-cols-2 gap-6">
+            <PomodoroTimer
+              onSessionComplete={() => setRefreshHistory(v => v + 1)}
+              darkMode={darkMode}
+              categoriesVersion={categoriesVersion}
+              lecturesVersion={lecturesVersion}
+              startLectureData={startLectureData}
+              onLectureStarted={() => setStartLectureData(null)}
+            />
 
-          <div
-            className={
-              activeTab === 'lectures' ? 'flex justify-center' : 'hidden'
-            }
-          >
-            <ToDoLectures
+            <SessionHistory
               refresh={refreshHistory}
               darkMode={darkMode}
-              onStartLecture={handleStartLecture}
+              onCategoriesChanged={() => setCategoriesVersion(v => v + 1)}
+              onLecturesChanged={() => setLecturesVersion(v => v + 1)}
             />
           </div>
+        )}
 
-          <div
-            className={
-              activeTab === 'calendar' ? 'flex justify-center' : 'hidden'
-            }
-          >
-            <StudyCalendar refresh={refreshHistory} darkMode={darkMode} />
-            <ChatButton onClick={() => setNotesOpen(true)} />
+        {activeTab === 'lectures' && (
+          <ToDoLectures
+            refresh={refreshHistory}
+            darkMode={darkMode}
+            onStartLecture={handleStartLecture}
+          />
+        )}
 
-          </div>
-        </div>
+        {activeTab === 'calendar' && (
+          <StudyCalendar refresh={refreshHistory} darkMode={darkMode} />
+        )}
       </div>
+
+      {/* 🐱 CHAT BUTTON */}
+      <ChatButton onClick={() => setNotesOpen(true)} />
+
+      {/* 📝 NOTES PANEL */}
+      {notesOpen && (
+        <NotesPanel onClose={() => setNotesOpen(false)} />
+      )}
     </div>
   );
 }
