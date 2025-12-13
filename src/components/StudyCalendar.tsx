@@ -348,7 +348,7 @@ export function StudyCalendar({ refresh, darkMode }: StudyCalendarProps) {
 
           <div className="flex items-center gap-1">
             <div className={`w-4 h-4 rounded ${darkMode ? 'bg-violet-700' : 'bg-violet-300'}`} />
-            <span className="text-xs text-gray-600 dark:text-gray-400">8h+ ★ bzz bzz</span>
+            <span className="text-xs text-gray-600 dark:text-gray-400">8h+ bzz bzz</span>
           </div>
         </div>
       </div>
