@@ -165,15 +165,19 @@ function App() {
         )}
 
         {activeTab === 'lectures' && (
-          <ToDoLectures
-            refresh={refreshHistory}
-            darkMode={darkMode}
-            onStartLecture={handleStartLecture}
-          />
+          <div className="flex justify-center">
+            <ToDoLectures
+              refresh={refreshHistory}
+              darkMode={darkMode}
+              onStartLecture={handleStartLecture}
+            />
+          </div>
         )}
 
         {activeTab === 'calendar' && (
-          <StudyCalendar refresh={refreshHistory} darkMode={darkMode} />
+          <div className="flex justify-center">
+            <StudyCalendar refresh={refreshHistory} darkMode={darkMode} />
+          </div>
         )}
       </div>
 
